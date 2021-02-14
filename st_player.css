@@ -1,0 +1,92 @@
+.controls_bar {
+    width: 960px;
+}
+
+canvas {
+    width: 960px;
+    height: 600px;
+}
+
+/* On screens that are 959px or less: */
+
+@media screen and (max-width: 959px) {
+    .controls_bar {
+        width: 640px;
+    }
+    canvas {
+        width: 640px;
+        height: 400px;
+    }
+}
+
+/* On screens that are 600px or less: */
+
+@media screen and (max-width: 639px) {
+    .controls_bar {
+        width: 320px;
+    }
+    canvas {
+        width: 320;
+        height: 200px;
+    }
+}
+
+a:link {
+    color: white;
+}
+
+a:visited {
+    color: white;
+}
+
+a:hover {
+    color: #8080FF;
+}
+
+button {
+    color: black;
+    background-color: #8080FF;
+    border: 3px solid;
+    border-top-color: white;
+    border-left-color: white;
+    border-right-color: #8000FF;
+    border-bottom-color: #8000FF;
+    font-size: 34px;
+    width: 55px;
+    height: 55px;
+    padding-top: 6px;
+}
+
+select {
+    color: black;
+    background-color: #8080FF;
+    border: 3px solid;
+    border-top-color: white;
+    border-left-color: white;
+    border-right-color: #8000FF;
+    border-bottom-color: #8000FF;
+    font-family: Arial, Helvetica, sans-serif;
+    /* select does not inherit font from body? */
+    font-weight: bold;
+    font-size: 40px;
+}
+
+option {
+    font-weight: normal;
+}
+
+h1 {
+    color: #8080FF;
+    font-family: Arial, Helvetica, sans-serif;
+    font-weight: bolder;
+    font-style: italic;
+    font-size: 60px;
+    text-shadow: -2px -2px #ffffff;
+}
+
+body {
+    color: #8080FF;
+    font-size: 20px;
+    background-color: black;
+    font-family: Arial, Helvetica, sans-serif;
+}
