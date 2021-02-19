@@ -6,28 +6,6 @@
 // ********************************************************************
 
 
-function hex_byte(x) {
-    return ("0000" + x.toString(16)).slice(-2);
-};
-
-
-function hex_word(x) {
-    return ("0000" + x.toString(16)).slice(-4);
-};
-
-
-function hexDump(pos, len) {
-    let s = "";
-    for (let i = pos; i < pos + len; i++) {
-        if (i < song_data.length) {
-            const n = song_data[i];
-            s += hex_byte(n) + " ";
-        };
-    };
-    return s;
-}
-
-
 function strDump(pos, len) {
     let s = "";
     for (let i = pos; i < pos + len; i++) {
@@ -35,56 +13,6 @@ function strDump(pos, len) {
         s += String.fromCharCode(n);
     };
     return s;
-}
-
-
-function hexDumpWord(pos, len) {
-    let s = "";
-    for (let i = pos; i < pos + 2 * len; i += 2) {
-        const l = song_data[i];
-        const h = song_data[i + 1];
-        const n = (h << 8) | (l & 0xff);
-        s += hex_word(n) + " ";
-    };
-    return s;
-}
-
-
-function getByteArray(pos, len, signed) {
-    let a = [];
-    for (let i = pos; i < pos + len; i++) {
-        let n = song_data[i];
-        if (signed === "signed" && (n > 0x7f)) {
-            n = -(0x100 - n);
-        };
-        a.push(n);
-    };
-    return [pos + len, a];
-}
-
-
-function getWordArray(pos, len, signed) {
-    let a = [];
-    for (let i = pos; i < pos + 2 * len; i += 2) {
-        const l = song_data[i];
-        const h = song_data[i + 1];
-        let n = (h << 8) | (l & 0xff);
-        if (signed === "signed" && (n > 0x7fff)) {
-            n = -(0x10000 - n);
-        };
-        a.push(n);
-    };
-    return [pos + 2 * len, a];
-}
-
-
-function getString(pos, len) {
-    let s = "";
-    for (let i = pos; i < pos + len; i++) {
-        const n = song_data[i];
-        s += String.fromCharCode(n);
-    };
-    return [pos + len, s];
 }
 
 
@@ -107,24 +35,6 @@ function loadSong() {
         };
     };
 };
-
-
-function getNoteNumber(n) {
-    const octave = n & 0x0f;
-    const note = (n >> 4) & 0x0f;
-    const num = octave * 12 + note;
-    return num;
-}
-
-
-function getNoteFrequency(n) {
-    // C-0 is 16.35 Hz
-    // 1.059463094359 is the twelfth root of 2 (2^(1/12))
-    // fn = f0 * (a)^n
-    const c0_freq = 16.35;
-    const two_12_root = 1.059463094359;
-    return c0_freq * (two_12_root ** n);
-}
 
 
 function init() {
@@ -157,18 +67,14 @@ function init() {
         ch_tone_period[ch] = 0;
         ch_volume[ch] = 0;
         ch_volume_reduction[ch] = 0;
-        ch_hardware_envelope_flag[ch] = 0;
+        ch_hardware_envelope_flag[ch] = HARDW_ENV_OFF;
         ch_hardware_envelope_period[ch] = 0;
         ch_noise_period[ch] = 0;
     };
 };
 
 
-
-
-
 function channelPlayEach50HzStep(ch) {
-
     if (ch_still_to_go[ch] <= 0) {
         if (ch_repeat_length[ch] === 0) {
             return;
@@ -176,7 +82,6 @@ function channelPlayEach50HzStep(ch) {
         ch_still_to_go[ch] = ch_repeat_length[ch];
         ch_current_instr_position[ch] = ch_repeat_position[ch];
     };
-    //console.log(ch_current_instr_position[ch] + ", goo=" + ch_still_to_go[ch])
     const instr_position = ch_current_instr_position[ch];
     ch_current_instr_position[ch]++;
     ch_still_to_go[ch]--;
@@ -188,7 +93,7 @@ function channelPlayEach50HzStep(ch) {
     if (ch_active_arpeggio[ch] !== NO_ARPEGGIO) {
         let delta_to_add_to_key = 0;
         switch (ch_active_arpeggio[ch]) {
-            case DIRECT_ARPEGGIO:
+            case DIRECT_ARPEGGIO: // not available in Soundtraker 1.x
                 switch (ch_arpeggio_counter[ch]) {
                     case 1: delta_to_add_to_key = ch_arpeggio_add_1[ch]; break;
                     case 2: delta_to_add_to_key = ch_arpeggio_add_2[ch]; break;
@@ -217,14 +122,9 @@ function channelPlayEach50HzStep(ch) {
     ch_tone_period[ch] += tone_add;
 
     // Volume Envelope
-    // Max.Volume Set
-    // Volume Slide
-    // Hard Envelope
-    let vol_change = song[ADDR_INSTRUMENTS + ch_current_instrument[ch] * 0x82 + instr_position];
-    if (vol_change < 128) {
-        // slide missing here
-        vol_change &= 0x0f;
-        let volume_to_set = vol_change; // da kommt noch was: - instr_step.volume;
+    let volume_to_set = song[ADDR_INSTRUMENTS + ch_current_instrument[ch] * 0x82 + instr_position];
+    if (volume_to_set < 128) {
+        volume_to_set &= 0x0f;
         volume_to_set -= ch_volume_reduction[ch];
         if (volume_to_set < 0) {
             volume_to_set = 0;
@@ -235,84 +135,36 @@ function channelPlayEach50HzStep(ch) {
     // Noise envelope
     const noise_period = song[ADDR_INSTRUMENTS + ch_current_instrument[ch] * 0x82 + 32 + instr_position];
     if (noise_period < 128) { // >= 128 means: ignore the data from the instrument
-        noise_period[ch] = noise_period & 0x1f;
+        ch_noise_period[ch] = noise_period & 0x1f;
     };
-
-    //hack:
-    if (ch_tone_period_old[ch] !== ch_tone_period[ch])
-        setFrequency(ch, ch_tone_period[ch]);
-
-    if (ch_hardware_envelope_flag[ch] === HARDW_ENV_OFF) {
-        if (ch_volume_old[ch] !== ch_volume[ch]) {
-            setVol(ch, ch_volume[ch]);
-        };
-    }
-    else {
-        setVol(ch, 0);
-    };
-
-    // remember last volume and tone period
-    ch_tone_period_old[ch] = ch_tone_period[ch];
-    ch_volume_old[ch] = ch_volume[ch];
-
-    //if ((ch === 0) || (ch === 2)) setVol(ch, 0);
-
-
 };
 
 
 function noiseHardwEnvPlayEach50HzStep() {
-    // Loop over the channels
-    let noise_period = 0;
-    let noise_volume = 0;
-    let noise_channel = -1;
-    let hardware_envelope_vol_sawtooth = 0;
-    let hardware_envelope_vol_triangle = 0;
-    let hardware_envelope_channel = -1;
+    // Loop over the channels to clear all noise and hardware envelope
     for (let i = 0; i < 3; i++) {
-        if (noise_period !== 0) {
-            noise_period = ch_noise_period[i];
-            noise_volume = ch_volume[i];
-            noise_channel = i;
+        const noise_bit = 1 << (3 + i);
+        ay_registers[7] |= noise_bit;
+        ay_registers[8 + i] &= 0x0f;
+    };
+    // Loop over the channels to set them, where needed
+    for (let i = 0; i < 3; i++) {
+        // Noise envelope
+        if (ch_noise_period[i] !== 0) {
+            const noise_bit = 1 << (3 + i);
+            ay_registers[6] = ch_noise_period[i];
+            ay_registers[7] &= ((noise_bit ^ 0xff) & 0xff);
         };
-        switch (ch_hardware_envelope_flag[i]) {
-            case HARDW_ENV_SAWTOOTH:
-                hardware_envelope_period = ch_hardware_envelope_period[i] * 16;
-                hardware_envelope_vol_sawtooth = HARDW_ENV_VOLUME;
-                hardware_envelope_vol_triangle = 0;
-                hardware_envelope_channel = i;
-                break;
-            case HARDW_ENV_TRIANGLE:
-                hardware_envelope_period = ch_hardware_envelope_period[i] * 16 * 2; // Triangle has half the frequency of the sawtooth
-                hardware_envelope_vol_sawtooth = 0;
-                hardware_envelope_vol_triangle = HARDW_ENV_VOLUME;
-                hardware_envelope_channel = i;
-                break;
+        // Hardware envelope
+        if (ch_hardware_envelope_flag[i] !== HARDW_ENV_OFF) {
+            ay_registers[8 + i] |= 0x10; // mit 8+ 2 geht es - probiere lied led-zep??
+            ay_registers[13] = ch_hardware_envelope_flag[i];
+            ay_registers[11] = ch_hardware_envelope_period[i];
+            ay_registers[12] = 0;
         };
     };
 
-    if (noise_period !== 0) {
-        setFrequency(OSCI_NOISE, noise_period);
-        setVol(OSCI_NOISE, noise_volume);
-        setVol(noise_channel, 0);
-    }
-    else {
-        setVol(OSCI_NOISE, 0);
-    };
-
-    if ((hardware_envelope_vol_sawtooth > 0) || (hardware_envelope_vol_triangle > 0)) {
-        setVol(OSCI_SAWTOOTH, hardware_envelope_vol_sawtooth);
-        setVol(OSCI_TRIANGLE, hardware_envelope_vol_triangle);
-        setVol(hardware_envelope_channel, 0);
-        setFrequency(OSCI_SAWTOOTH, hardware_envelope_period);
-        setFrequency(OSCI_TRIANGLE, hardware_envelope_period);
-    }
-    else {
-        setVol(OSCI_SAWTOOTH, 0);
-        setVol(OSCI_TRIANGLE, 0);
-    };
 };
-
 
 
 function channelPlayEachPatternLine(ch) {
@@ -345,11 +197,15 @@ function channelPlayEachPatternLine(ch) {
         };
     };
 
+    // done, if key is zero
+    if (key_number === 0) {
+        return;
+    };
+
     const effect = song[my_pattern_address + 1] & 0x0f;
     const par = song[my_pattern_address + 2] & 0xff;
 
-
-    // do effects here
+    // set effects
     switch (effect) {
         case 0x1:   // Arpeggio off
             ch_active_arpeggio[ch] = NO_ARPEGGIO;
@@ -357,14 +213,10 @@ function channelPlayEachPatternLine(ch) {
             break;
         case 0x8:   // Sawtooth
         case 0xc:
-            ch_active_arpeggio[ch] = NO_ARPEGGIO;
-            ch_hardware_envelope_flag[ch] = HARDW_ENV_SAWTOOTH;
-            ch_hardware_envelope_period[ch] = par;
-            break;
         case 0xa:   // Triangle
         case 0xe:
             ch_active_arpeggio[ch] = NO_ARPEGGIO;
-            ch_hardware_envelope_flag[ch] = HARDW_ENV_TRIANGLE;
+            ch_hardware_envelope_flag[ch] = effect;
             ch_hardware_envelope_period[ch] = par;
             break;
         case 0xb:
@@ -383,10 +235,6 @@ function channelPlayEachPatternLine(ch) {
             break;
     };
 
-    // done, if key is zero
-    if (key_number === 0) {
-        return;
-    };
 
     const song_transpose = signedByte(song[ADDR_SONG_TRANSPOSE]);
     const pattern_transpose = signedByte(song[ADDR_PATTERN_TRANSPOSE_TABLE + current_position_in_song_list]);
@@ -406,22 +254,6 @@ function interrupt() {
         nextSong();
     };
 
-    // Schedule the next interrupt (50 Hz)
-    if (exact_timing) {
-        requestAnimationFrame(interrupt);
-        // This is for timing to make the 60 Hz frame refresh to a 50 Hz interrupt like in old European TV sets
-        timing_counter++;
-        if (timing_counter > 4) {
-            timing_counter = 0;
-            return;
-        };
-    }
-    else {  // Not exact due to the weakness of Firefox, but can be run, when browser window is not visible
-        const now = Date.now();
-        time_last_interrupt = now;
-        timeout = setTimeout(interrupt, 20);
-    };
-
     // Loop over the 3 channels for the things to do in each interrupt
     for (let i = 0; i < 3; i++) {
         channelPlayEach50HzStep(i);
@@ -429,6 +261,12 @@ function interrupt() {
 
     // Do the stuff for the noise generator and the hardware envelope in each interrupt
     noiseHardwEnvPlayEach50HzStep();
+
+    // Loop over the 3 channels to set AY registers
+    for (let i = 0; i < 3; i++) {
+        setVol(i, ch_volume[i]);
+        setFrequency(i, ch_tone_period[i]);
+    };
 
     // Update counter for tempo of song
     song_delay_counter--;
@@ -439,14 +277,11 @@ function interrupt() {
 
     // Loop over the 3 channels for the things to do in each pattern line
     for (let i = 0; i < 3; i++) {
-        channelPlayEachPatternLine(i)
+        channelPlayEachPatternLine(i);
     };
-
-    updateUI();
 
     // Update counter for the pattern lines
     current_pattern_line++;
-    //console.log(current_position_in_song_list + ":" + song[ADDR_SONG_LIST + current_position_in_song_list] + "/" + current_pattern_line)
     if (current_pattern_line < pattern_length) {
         return;
     };
@@ -455,7 +290,6 @@ function interrupt() {
     ch_volume_reduction[0] = 0;
     ch_volume_reduction[1] = 0;
     ch_volume_reduction[2] = 0;
-
 
     // When pattern is over, go to the next position in the song list
     current_pattern_line = 0;
@@ -470,89 +304,24 @@ function interrupt() {
     for (let i = 0; i < 3; i++) {
         ch_active_arpeggio[i] = NO_ARPEGGIO;
         ch_hardware_envelope_flag[i] = HARDW_ENV_OFF;
+        //ch_volume[i] = 0;
     };
 
 };
 
 
-
-
-
-
-
 function setFrequency(channel, period) {
-    if ((typeof period !== "number") || (period === 0) || (isNaN(period))) {
-        return;
-    };
-    if (channel === OSCI_NOISE) {
-        const detune_value = 1000000 / period / 16 * 2;
-        osci[channel].detune.value = 1000 + detune_value;  // Hack - check this!!!!
-    }
-    else {
-        const freq = 1000000 / period / 16;
-        osci[channel].frequency.setValueAtTime(freq, audioCtx.currentTime); // value in Hertz
+    if ((typeof period === "number") && (!isNaN(period)) && (channel < 3)) {
+        ay_registers[channel * 2] = period & 0xff;
+        ay_registers[channel * 2 + 1] = (period >> 8) & 0x0f;
     };
 }
 
 
 function setVol(channel, vol) {
-    const volume = volume_to_percent[vol] * master_volume;
-    osci_volume[channel] = vol; // just needed for visualization
-    gain[channel].gain.setValueAtTime(volume, audioCtx.currentTime); // value in percent (between 0.00 and 1.00)
-}
-
-
-function initOsci(channel) {
-    switch (channel) {
-        case 0:
-        case 1:
-        case 2:
-            gain[channel] = audioCtx.createGain();
-            osci[channel] = audioCtx.createOscillator();
-            osci[channel].type = "square";
-            setFrequency(channel, 197);
-            osci[channel].connect(gain[channel]);
-            gain[channel].connect(filter);
-            osci[channel].start();
-            setVol(channel, 0);
-            break;
-        case OSCI_NOISE:
-            const bufferSize = 2 * audioCtx.sampleRate;
-            const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-            let output = noiseBuffer.getChannelData(0);
-            for (let i = 0; i < bufferSize; i++) {
-                output[i] = Math.random() * 2 - 1;
-            };
-            gain[channel] = audioCtx.createGain();
-            osci[channel] = audioCtx.createBufferSource();
-            osci[channel].buffer = noiseBuffer;
-            osci[channel].loop = true;
-            setFrequency(channel, 0);
-            osci[channel].connect(gain[channel]);
-            gain[channel].connect(filter);
-            osci[channel].start();
-            setVol(channel, 0);
-            break;
-        case OSCI_SAWTOOTH:
-            gain[channel] = audioCtx.createGain();
-            osci[channel] = audioCtx.createOscillator();
-            osci[channel].type = "sawtooth";
-            setFrequency(channel, 0);
-            osci[channel].connect(gain[channel]);
-            gain[channel].connect(filter);
-            osci[channel].start();
-            setVol(channel, 0);
-            break;
-        case OSCI_TRIANGLE:
-            gain[channel] = audioCtx.createGain();
-            osci[channel] = audioCtx.createOscillator();
-            osci[channel].type = "triangle";
-            setFrequency(channel, 0);
-            osci[channel].connect(gain[channel]);
-            gain[channel].connect(filter);
-            osci[channel].start();
-            setVol(channel, 0);
-            break;
+    if (channel < 3) {
+        ay_registers[8 + channel] &= 0xf0;
+        ay_registers[8 + channel] |= (vol & 0x0f);
     };
 }
 
@@ -583,17 +352,138 @@ function selectSong(element) {
 }
 
 
-function play() {
-    // Mute the oscillators at the beginning
-    if (!first_time_start) {
-        setVol(0, 0);
-        setVol(1, 0);
-        setVol(2, 0);
-        setVol(OSCI_NOISE, 0);
-        setVol(OSCI_SAWTOOTH, 0);
-        setVol(OSCI_TRIANGLE, 0);
+// Thank you Bergi and Blorf from stackoverflow for this timing solution:
+function calcDrift(arr) {
+    // Calculate drift correction.
+
+    /*
+    In this example I've used a simple median.
+    You can use other methods, but it's important not to use an average. 
+    If the user switches tabs and back, an average would put far too much
+    weight on the outlier.
+    */
+
+    let values = arr.concat(); // copy array so it isn't mutated
+
+    values.sort(function (a, b) {
+        return a - b;
+    });
+    if (values.length === 0) return 0;
+    const half = Math.floor(values.length / 2);
+    if (values.length % 2) return values[half];
+    const median = (values[half - 1] + values[half]) / 2.0;
+
+    return median;
+}
+
+
+function periodicTask() {
+    var dt = Date.now() - expected; // the drift (positive for overshooting)
+    if (dt > interval) {
+        // something really bad happened. Maybe the browser (tab) was inactive?
+        // possibly special handling to avoid futile "catch up" run
+    };
+    // do what is to be done
+    interrupt();
+    updateUI();
+
+    // don't update the history for exceptionally large values
+    if (dt <= interval) {
+        // sample drift amount to history after removing current correction
+        // (add to remove because the correction is applied by subtraction)
+        drift_history.push(dt + drift_correction);
+
+        // predict new drift correction
+        drift_correction = calcDrift(drift_history);
+
+        // cap and refresh samples
+        if (drift_history.length >= drift_history_samples) {
+            drift_history.shift();
+        };
     };
 
+    expected += interval;
+    // take into account drift with prediction
+    setTimeout(periodicTask, Math.max(0, interval - dt - drift_correction));
+}
+
+
+function run() {
+    // Make the songs array
+    songs = [];
+    for (const song in sng_file) {
+        songs.push(song);
+    };
+
+    // Set first song to play
+    selected_song = 104; // Song "Elmibub"
+
+    // UI initialization
+    initUi();
+}
+
+
+// The following is for the AY-3-8910 emulator
+// The emulator still uses createScriptProcessor, so it will break some time soon :-/
+// When I have time, I should convert it to audio worklet to be more future-proof
+
+function updateState(renderer, r) {
+    /*    r = [
+            0x22, 0x22, // channel A tone period
+            0xff, 0x00, // channel B tone period
+            0xff, 0x00, // channel C tone period
+            0x22, // noise period
+            0xf8, // enable
+            0x00, // channel A amplitude
+            0x00, // channel B amplitude
+            0x10, // channel C amplitude
+            0x22, 0x00, // envelope period
+            0x09,  // envelope shape
+            0x00, 0x00
+        ];
+        */
+    renderer.setTone(0, (r[1] << 8) | r[0]);
+    renderer.setTone(1, (r[3] << 8) | r[2]);
+    renderer.setTone(2, (r[5] << 8) | r[4]);
+    renderer.setNoise(r[6]);
+    renderer.setMixer(0, r[7] & 1, (r[7] >> 3) & 1, r[8] >> 4);
+    renderer.setMixer(1, (r[7] >> 1) & 1, (r[7] >> 4) & 1, r[9] >> 4);
+    renderer.setMixer(2, (r[7] >> 2) & 1, (r[7] >> 5) & 1, r[10] >> 4);
+    renderer.setVolume(0, r[8] & 0xf);
+    renderer.setVolume(1, r[9] & 0xf);
+    renderer.setVolume(2, r[10] & 0xf);
+    renderer.setEnvelope((r[12] << 8) | r[11]);
+    if (r[13] !== ay_reg13_old) {
+        ay_reg13_old = r[13];
+        if (r[13] != 0xff) {
+            renderer.setEnvelopeShape(r[13]);
+        };
+    };
+}
+
+
+function fillBuffer(e) {
+    var left = e.outputBuffer.getChannelData(0);
+    var right = e.outputBuffer.getChannelData(1);
+    for (var i = 0; i < left.length; i++) {
+        isrCounter += isrStep;
+        if (isrCounter >= 1) {
+            updateState(ayumi, ay_registers);
+            isrCounter--;
+        }
+        ayumi.process();
+        ayumi.removeDC();
+        left[i] = ayumi.left;
+        right[i] = ayumi.right;
+        if (master_volume === 0) {
+            left[i] = 0;
+            right[i] = 0;
+        };
+    };
+}
+
+
+function play() {
     // The file
     song_data = sng_file[songs[selected_song]];
 
@@ -607,52 +497,28 @@ function play() {
     if (first_time_start) {
         first_time_start = false;
 
-        // Create filter node
-        filter = audioCtx.createBiquadFilter();
-        filter.frequency.value = 5000;
-        filter.detune.value = 100;
-        filter.gain.value = 25;
-        filter.connect(audioCtx.destination);
+        // Audio init
+        audioContext = new AudioContext();
+        audioNode = audioContext.createScriptProcessor(1024, 0, 2);
+        audioNode.onaudioprocess = fillBuffer;
 
-        // Create Oscillator nodes
-        initOsci(0);
-        initOsci(1);
-        initOsci(2);
-        initOsci(OSCI_NOISE);
-        initOsci(OSCI_SAWTOOTH);
-        initOsci(OSCI_TRIANGLE);
+        sampleRate = audioContext.sampleRate;
+        isrStep = 1;  // I just took 1
+        isrCounter = 0;
 
-        // switch timing method (from requestAnimationFrame to setTimeout), when the user switches away from this window
-        document.addEventListener("visibilitychange", () => {
-            exact_timing = (document.visibilityState === "visible");
-            if (!exact_timing) {
-                time_last_interrupt = Date.now();
-                timeout = setTimeout(interrupt, 20);
-            }
-            else {
-                clearTimeout(timeout);
-            };
-        });
+        ayumi = new Ayumi;
+        ayumi.configure(true, 1000000 /* clockrate */, sampleRate);
+        ayumi.setPan(0, 0.1, 0);
+        ayumi.setPan(1, 0.5, 0);
+        ayumi.setPan(2, 0.9, 0);
 
-        // Start the 50Hz interrupt for continuous update. These damned browsers still have differences in timing!! That's crazy. Come on guys we are in 2021.
-        time_last_interrupt = Date.now();
-        requestAnimationFrame(interrupt);
-    };
-}
+        audioNode.connect(audioContext.destination);
 
-
-function run() {
-    // Make the songs array
-    songs = [];
-    for (const song in sng_file) {
-        songs.push(song);
+        // Start the 25Hz interrupt for continuous update.
+        expected = Date.now() + interval;
+        setTimeout(periodicTask, interval);
     };
 
-    // Set first song to play
-    selected_song = 72; // Song "Demo1"
-
-    // UI initialization
-    initUi();
-}
+};
 
 

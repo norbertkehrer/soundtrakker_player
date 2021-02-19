@@ -16,20 +16,6 @@ let parsed_text = "";
 // Current song data
 let song = [];
 
-// Oscillator, gain, and filter audio nodes
-let osci = [];
-let freq = [220, 220, 220];
-
-let gain = [];
-let vol = [220, 220, 220];
-
-let filter = {};
-
-let osci_volume = [0, 0, 0, 0, 0, 0]; // just for the visualization
-
-// Master volume controlled by a slider
-let master_volume = 1;
-
 // Create web audio api context
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
@@ -53,27 +39,6 @@ const key_to_tone_period = [
   21, 20, 19, 18, 17, 16,
   15, 0, 0
 ];
-
-// To translate volume values to percentages
-const volume_to_percent = [
-  0.0000000,
-  0.0078125,
-  0.0110485,
-  0.0156250,
-  0.0220971,
-  0.0312500,
-  0.0441942,
-  0.0625000,
-  0.0883883,
-  0.1250000,
-  0.1767767,
-  0.2500000,
-  0.3535534,
-  0.5000000,
-  0.7071068,
-  1.0000000
-];
-
 
 // Addresses for the song data
 const ADDR_INSTRUMENTS = 0x000;
@@ -99,11 +64,6 @@ const HARDW_ENV_VOLUME = 10;
 const NO_ARPEGGIO = 0;
 const ARPEGGIO_NUMBER = 1;
 const DIRECT_ARPEGGIO = 2;
-
-// Oscillator numbers
-const OSCI_NOISE = 3;
-const OSCI_SAWTOOTH = 4;
-const OSCI_TRIANGLE = 5;
 
 // Song registers
 let delay = 0;
@@ -132,8 +92,26 @@ let ch_volume_reduction = [];
 let ch_hardware_envelope_flag = [];
 let ch_hardware_envelope_period = [];
 let ch_noise_period = [];
-let ch_volume_old = [];
-let ch_tone_period_old = [];
+
+// The registers of the AY-3-8910
+let ay_registers = [
+  0x22, 0x22, // channel A tone period
+  0x22, 0x22, // channel B tone period
+  0x22, 0x22, // channel C tone period
+  0x22, // noise period
+  0xf8, // enable
+  0x00, // channel A amplitude
+  0x00, // channel B amplitude
+  0x00, // channel C amplitude
+  0x22, 0x22, // envelope period
+  0x00,  // envelope shape
+  0x00, 0x00
+];
+
+let ay_reg13_old = -1;
+
+// For muting:
+let master_volume = 1;
 
 // Textual information in the song data
 let song_name = "";
@@ -147,10 +125,14 @@ let selected_song = 0;
 let first_time_start = true;
 
 // This is for timing. I do not understand, why Firefox cannot do a reliable setInterval(20). Works in Chrome.
-let exact_timing = true;
+const interval = 20; // ms
+let expected = Date.now() + interval;
+let drift_history = [];
+let drift_history_samples = 10;
+let drift_correction = 0;
+
+//let exact_timing = true;
 let time_last_interrupt = 0;
-let timing_counter = 0;
-let timeout = {};
 let time_last_song = 0;
 const DURATION_OF_A_SONG = 180 * 1000; // in milliseconds
 

@@ -114,8 +114,7 @@ function drawBars() {
     const x = 296;
     const y = 142;
     for (let i = 0; i < 3; i++) {
-        //const height = ch_volume[i];
-        const height = osci_volume[i];
+        const height = ay_registers[8 + i] & 0x0f;
         rect(x + 5 * i, y - 15, 4, 15, COL_BLUE);
         rect(x + 5 * i, y - height, 4, height, COL_BLACK);
     };
@@ -233,19 +232,6 @@ function drawTracks() {
     rect(315, 3, 1, 1, COL_WHITE);
     rect(315, 9, 1, 1, COL_WHITE);
 
-
- /*   rect(298, 6, 1, 2, COL_BLACK);
-    rect(299, 5, 8, 1, COL_BLACK);
-    rect(308, 5, 2, 1, COL_BLACK);
-    rect(304, 5, 1, 6, COL_BLACK);
-    rect(311, 5, 3, 1, COL_WHITE);
-    rect(312, 4, 1, 3, COL_WHITE);
-    rect(312, 2, 1, 1, COL_WHITE);
-    rect(312, 8, 1, 1, COL_WHITE);
-    rect(315, 5, 1, 1, COL_WHITE);
-    */
-
-
     // Draw the canvas
     graphicsCtx.putImageData(canvas_image, 0, 0);
 }
@@ -262,12 +248,6 @@ function muteUnmute() {
         html_mute_icon.style.display = "inline";
         html_unmute_icon.style.display = "none";
     };
-}
-
-
-
-function changeMasterVolume(n) {
-    master_volume = n / 100;
 }
 
 
