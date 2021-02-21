@@ -101,7 +101,7 @@ function drawTriangleLeft(x, y) {
 function drawBox(x, y, w, h) {
     // top and left border
     rect(x, y, w - 1, 1, COL_VIOLET);
-    rect(x, y + 1, 1, h, COL_VIOLET);
+    rect(x, y + 1, 1, h - 1, COL_VIOLET);
     // bottom and right border
     rect(x + 1, y + h - 1, w - 1, 1, COL_WHITE);
     rect(x + w - 1, y, 1, h, COL_WHITE);
@@ -257,7 +257,6 @@ function initUi() {
     for (let i = 0; i < 3; i++) {
         html_tracks[i] = document.getElementById("track" + (i + 1));
         html_instr_names[i] = document.getElementById("instr" + (i + 1));
-        track_contents[i] = "";
     };
     for (let i = 0; i < 9; i++) {
         html_bars[i] = document.getElementById("bar" + i);
@@ -282,7 +281,157 @@ function initUi() {
 }
 
 
+function clearDisplayList() {
+    display_list = [];
+    for (let i = 0; i < 2 * DISPLAY_LIST_MIDDLE; i++) {
+        display_list.push({
+            "pattern_line": 0,
+            "notes": [{ "key": 0, "instr_eff": 0 }, { "key": 0, "instr_eff": 0 }, { "key": 0, "instr_eff": 0 }]
+        });
+    };
+    display_list_built_for_song_list_pos = -1;
+    display_list_built_for_pattern_line = -1;
+}
+
+
+function drawNoteTracks() {
+    let first_line = DISPLAY_LIST_MIDDLE - 8;
+    for (let i = 0; i < 3; i++) {
+        let line = first_line;
+        for (let l = 0; l < 17; l++) {
+            const pattern_line = display_list[line].pattern_line;
+            const key = display_list[line].notes[i].key;
+            const instr_eff = display_list[line].notes[i].instr_eff;
+            let pr_line = musicalKey(key) + " " + ("0000" + instr_eff.toString(16).toUpperCase()).slice(-4);
+            let pr_pattern_line_nr = decimal2digits(pattern_line);
+            if (l === 8) {
+                drawString(pr_line, 64 + i * 80, 6 + l * 8, COL_BLACK, COL_WHITE);
+                if (i === 0) {
+                    drawString(pr_pattern_line_nr, 32, 6 + l * 8, COL_BLACK, COL_WHITE);
+                };
+            }
+            else {
+                drawString(pr_line, 64 + i * 80, 6 + l * 8, COL_BLACK, COL_VIOLET);
+                if (i === 0) {
+                    drawString(pr_pattern_line_nr, 32, 6 + l * 8, COL_BLACK, COL_VIOLET);
+                };
+            };
+            line++;
+        };
+
+        // Instrument name
+        const name = instrument_names[ch_current_instrument[i]].charAt(0) + (instrument_names[ch_current_instrument[i]].slice(1)).toLowerCase();
+        drawString(name, 64 + i * 80, 148, COL_BLUE, COL_BLACK);
+    };
+}
+
+
+function setPianoScroll(b) {
+    display_piano_scroll = b;
+    if (display_piano_scroll) {
+        // draw the border of the area at the top and bottom
+        rect(31, 3, 256, 1, COL_VIOLET);
+        rect(31, 144, 256, 1, COL_WHITE);
+    }
+    else {
+        drawTracks();
+    };
+};
+
+
+function drawPianoScroll() {
+    // empty the area first
+    rect(32, 4, 2 * 128, 140, COL_BLACK);
+    rect(32, 4 + 68, 2 * 128, 2, 0x222222);
+    // draw area
+    let line = DISPLAY_LIST_MIDDLE - 34;
+    for (let i = 0; i < 70; i++) {
+        const x = 32;
+        const y = 2 * i + 4;
+        for (let ch = 0; ch < 3; ch++) {
+            const key = display_list[line].notes[ch].key;
+            const key_nr = ((key >> 4) & 0x0f) + 12 * (key & 0x0f);
+            const instr_eff = display_list[line].notes[ch].instr_eff;
+            let color = COL_BLACK;
+            if (line === DISPLAY_LIST_MIDDLE) {
+                color = COL_WHITE;
+            }
+            else {
+                color = instr_color[(instr_eff >> 12) & 0x0f];
+            };
+            if ((key_nr > 0) && (key_nr < 127)) {
+                rect(x + 2 * key_nr, y, 2, 2, color); // draw the dot at the key position
+                if (line === DISPLAY_LIST_MIDDLE) {
+                    rect(x + 2 * key_nr - 1, y - 1, 4, 4, COL_WHITE);
+                };
+            };
+        };
+        line++;
+    };
+    // Instrument names
+    for (let i = 0; i < 3; i++) {
+        const name = instrument_names[ch_current_instrument[i]].charAt(0) + (instrument_names[ch_current_instrument[i]].slice(1)).toLowerCase();
+        drawString(name, 64 + i * 80, 148, COL_BLUE, COL_BLACK);
+    };
+}
+
+
 function updateUI() {
+    // leave, if display list has changed and has to be rebuilt
+    if ((display_list_built_for_song_list_pos === current_position_in_song_list) &&
+        (display_list_built_for_pattern_line === current_pattern_line)) {
+        return;
+    };
+
+    // else build it:
+    display_list_built_for_song_list_pos = current_position_in_song_list;
+    display_list_built_for_pattern_line = current_pattern_line;
+
+    // shift the display list one place up
+    display_list.shift();
+    // build the future starting at the middle
+    let songlist_pos = current_position_in_song_list;
+    let line = current_pattern_line;
+    for (let i = DISPLAY_LIST_MIDDLE; i < 2 * DISPLAY_LIST_MIDDLE; i++) {
+        const pattern = song[ADDR_SONG_LIST + songlist_pos];
+        let item = [];
+        for (let i = 0; i < 3; i++) {
+            const my_pattern_address = ADDR_PATTERNS + pattern * pattern_length * 9 + line * 9 + i * 3;
+            const key = song[my_pattern_address];
+            const instr_eff = ((song[my_pattern_address + 1] << 8) | song[my_pattern_address + 2]) & 0xffff;
+            item.push({ "key": key, "instr_eff": instr_eff });
+        };
+        display_list[i] = { "pattern_line": line, "notes": item };
+        line++;
+        if (line >= pattern_length) {
+            line = 0;
+            songlist_pos++;
+            if (songlist_pos >= song_length) {
+                songlist_pos = loop_to;
+            };
+        };
+    };
+
+    // Draw the pattern number
+    drawString(decimal2digits(song[ADDR_SONG_LIST + current_position_in_song_list]), 8, 6, COL_BLACK, COL_WHITE);
+
+    // Draw the frequency spectrum
+    drawBars();
+
+    // Draw the notes
+    if (display_piano_scroll) {
+        drawPianoScroll();
+    }
+    else {
+        drawNoteTracks();
+    };
+
+    // Draw the canvas
+    graphicsCtx.putImageData(canvas_image, 0, 0);
+}
+
+
+function updateUIold() {
     const pattern = song[ADDR_SONG_LIST + current_position_in_song_list];
     drawString(decimal2digits(pattern), 8, 6, COL_BLACK, COL_WHITE);
 

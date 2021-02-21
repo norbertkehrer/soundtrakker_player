@@ -112,6 +112,7 @@ let ay_reg13_old = -1;
 
 // For muting:
 let master_volume = 1;
+let channel_muted = [false, false, false];
 
 // Textual information in the song data
 let song_name = "";
@@ -147,8 +148,31 @@ let html_selector = {};
 let html_mute_icon = {};
 let html_unmute_icon = {};
 
-// Texts in the track windows in the UI
-let track_contents = [];
+// Display list for the track windows in the UI
+const DISPLAY_LIST_MIDDLE = 200;
+let display_list = [];
+let display_list_built_for_song_list_pos = 0;
+let display_list_built_for_pattern_line = 0;
+let display_piano_scroll = false;
+const instr_color = [
+  0xff8000,   // orange
+  0xff0000,   // red
+  0x8080FF,   // light blue
+  0x00ffff,   // turquoise
+  0xff00ff,   // magenta
+  0xffff00,   // yellow
+  0xff0000,   // red
+  0x0000ff,   // blue
+  0xff007f,   // pink
+  0x7f00ff,   // violet
+  0x00ff80,   // light green
+  0xff00ff,   // magenta
+  0xffff00,   // yellow
+  0xff8000,   // orange
+  0xff0000,   // red
+  0x0000ff,   // blue
+  0x8080FF    // light blue
+];
 
 // Canvas context for the track visualization
 let graphicsCtx = {};

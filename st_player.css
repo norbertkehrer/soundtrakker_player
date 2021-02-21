@@ -2,9 +2,39 @@
     width: 960px;
 }
 
+.mute_channel {
+    text-align: center;
+    width: 240px;
+}
+
+.track_style {
+    text-align: center;
+    width: 180px;
+}
+
 canvas {
     width: 960px;
     height: 600px;
+}
+
+/* On screens that are 639px or less: */
+
+@media screen and (max-width: 639px) {
+    .controls_bar {
+        width: 320px;
+    }
+    .mute_channel {
+        text-align: center;
+        width: 80px;
+    }
+    .track_style {
+        text-align: center;
+        width: 60px;
+    }
+    canvas {
+        width: 320;
+        height: 200px;
+    }
 }
 
 /* On screens that are 959px or less: */
@@ -13,21 +43,17 @@ canvas {
     .controls_bar {
         width: 640px;
     }
+    .mute_channel {
+        text-align: center;
+        width: 160px;
+    }
+    .track_style {
+        text-align: center;
+        width: 120px;
+    }
     canvas {
         width: 640px;
         height: 400px;
-    }
-}
-
-/* On screens that are 600px or less: */
-
-@media screen and (max-width: 639px) {
-    .controls_bar {
-        width: 320px;
-    }
-    canvas {
-        width: 320;
-        height: 200px;
     }
 }
 
@@ -52,7 +78,7 @@ button {
     border-right-color: #8000FF;
     border-bottom-color: #8000FF;
     font-size: 34px;
-    width: 55px;
+    width: 80px;
     height: 55px;
     padding-top: 6px;
 }
@@ -80,7 +106,7 @@ h1 {
     font-family: Arial, Helvetica, sans-serif;
     font-weight: bolder;
     font-style: italic;
-    font-size: 60px;
+    font-size: 58px;
     text-shadow: -2px -2px #ffffff;
 }
 

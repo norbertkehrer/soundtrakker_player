@@ -70,6 +70,7 @@ function init() {
         ch_hardware_envelope_flag[ch] = HARDW_ENV_OFF;
         ch_hardware_envelope_period[ch] = 0;
         ch_noise_period[ch] = 0;
+        setVol(ch, 0);
     };
 };
 
@@ -235,7 +236,6 @@ function channelPlayEachPatternLine(ch) {
             break;
     };
 
-
     const song_transpose = signedByte(song[ADDR_SONG_TRANSPOSE]);
     const pattern_transpose = signedByte(song[ADDR_PATTERN_TRANSPOSE_TABLE + current_position_in_song_list]);
 
@@ -293,11 +293,9 @@ function interrupt() {
 
     // When pattern is over, go to the next position in the song list
     current_pattern_line = 0;
+    current_position_in_song_list++;
     if (current_position_in_song_list >= song_length) {
         current_position_in_song_list = loop_to;
-    }
-    else {
-        current_position_in_song_list++;
     };
 
     // Switch off arpeggio and hardware envelopes, when pattern ends
@@ -378,11 +376,12 @@ function calcDrift(arr) {
 
 
 function periodicTask() {
-    var dt = Date.now() - expected; // the drift (positive for overshooting)
+    const dt = Date.now() - expected; // the drift (positive for overshooting)
     if (dt > interval) {
         // something really bad happened. Maybe the browser (tab) was inactive?
         // possibly special handling to avoid futile "catch up" run
     };
+
     // do what is to be done
     interrupt();
     updateUI();
@@ -403,6 +402,7 @@ function periodicTask() {
     };
 
     expected += interval;
+
     // take into account drift with prediction
     setTimeout(periodicTask, Math.max(0, interval - dt - drift_correction));
 }
@@ -423,35 +423,22 @@ function run() {
 }
 
 
-// The following is for the AY-3-8910 emulator
+// The following two functions are for the AY-3-8910 emulator
 // The emulator still uses createScriptProcessor, so it will break some time soon :-/
 // When I have time, I should convert it to audio worklet to be more future-proof
 
 function updateState(renderer, r) {
-    /*    r = [
-            0x22, 0x22, // channel A tone period
-            0xff, 0x00, // channel B tone period
-            0xff, 0x00, // channel C tone period
-            0x22, // noise period
-            0xf8, // enable
-            0x00, // channel A amplitude
-            0x00, // channel B amplitude
-            0x10, // channel C amplitude
-            0x22, 0x00, // envelope period
-            0x09,  // envelope shape
-            0x00, 0x00
-        ];
-        */
-    renderer.setTone(0, (r[1] << 8) | r[0]);
-    renderer.setTone(1, (r[3] << 8) | r[2]);
-    renderer.setTone(2, (r[5] << 8) | r[4]);
+    for (let ch = 0; ch < 3; ch++) {
+        if (channel_muted[ch]) {
+            renderer.setMixer(ch, 1, 1, 0); // turn off tone, noise, and hardware envelope
+        }
+        else {
+            renderer.setTone(ch, (r[2 * ch + 1] << 8) | r[2 * ch]);
+            renderer.setVolume(ch, r[8 + ch] & 0xf);
+            renderer.setMixer(ch, (r[7] >> ch) & 1, (r[7] >> (3 + ch)) & 1, r[8 + ch] >> 4);
+        };
+    };
     renderer.setNoise(r[6]);
-    renderer.setMixer(0, r[7] & 1, (r[7] >> 3) & 1, r[8] >> 4);
-    renderer.setMixer(1, (r[7] >> 1) & 1, (r[7] >> 4) & 1, r[9] >> 4);
-    renderer.setMixer(2, (r[7] >> 2) & 1, (r[7] >> 5) & 1, r[10] >> 4);
-    renderer.setVolume(0, r[8] & 0xf);
-    renderer.setVolume(1, r[9] & 0xf);
-    renderer.setVolume(2, r[10] & 0xf);
     renderer.setEnvelope((r[12] << 8) | r[11]);
     if (r[13] !== ay_reg13_old) {
         ay_reg13_old = r[13];
@@ -494,6 +481,9 @@ function play() {
     // Initalize the player
     init();
 
+    // and the display
+    clearDisplayList();
+
     if (first_time_start) {
         first_time_start = false;
 
@@ -514,7 +504,7 @@ function play() {
 
         audioNode.connect(audioContext.destination);
 
-        // Start the 25Hz interrupt for continuous update.
+        // Start the 50Hz interrupt for continuous update
         expected = Date.now() + interval;
         setTimeout(periodicTask, interval);
     };

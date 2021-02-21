@@ -26,6 +26,9 @@
 
     <!-- *********************************************************************************************** -->
 
+
+
+
     <div class="controls_bar">
         <div style="float: left">
             <select name="songs" id="song_selector" onchange="selectSong(this)"> </select>
@@ -74,9 +77,24 @@
 
     <p>
         <canvas id="canvas"></canvas>
+
     <p>
-        Read more on Norbert's homepage at <a
-            href="https://norbertkehrer.github.io/">https://norbertkehrer.github.io</a>
+    <table style="table-layout: fixed;">
+        <tr>
+            <td class="track_style"> Piano roll
+            <td class="mute_channel"> Mute A
+            <td class="mute_channel"> Mute B
+            <td class="mute_channel"> Mute C
+        <tr>
+            <td class="track_style"> <input type="checkbox" onclick="setPianoScroll(this.checked);">
+            <td class="mute_channel"> <input type="checkbox" onclick="channel_muted[0] = this.checked;">
+            <td class="mute_channel"> <input type="checkbox" onclick="channel_muted[1] = this.checked;">
+            <td class="mute_channel"> <input type="checkbox" onclick="channel_muted[2] = this.checked;">
+    </table>
+
+    <p>
+
+        Read more on <a href="https://norbertkehrer.github.io/">Norbert's homepage</a>.
 
 </body>
 
